@@ -1,0 +1,1425 @@
+```react
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  FlaskConical, 
+  HelpCircle, 
+  BookOpen, 
+  Award, 
+  ArrowRight, 
+  CheckCircle2, 
+  XCircle, 
+  RotateCcw, 
+  Info, 
+  ChevronRight, 
+  Layers, 
+  Sparkles, 
+  Activity,
+  Maximize2,
+  Box,
+  Eye
+} from 'lucide-react';
+
+// --- STYLES AND CONFIGURATION ---
+const FUNCTIONAL_GROUPS = [
+  { id: 'carboxylic_acid', name: 'Carboxylic Acid', suffix: '-oic acid', priority: 1, color: '#ef4444', shorthand: 'COOH' },
+  { id: 'ester', name: 'Ester (Methyl)', suffix: '-oate', priority: 2, color: '#ec4899', shorthand: 'COOCH3' },
+  { id: 'aldehyde', name: 'Aldehyde', suffix: '-al', priority: 3, color: '#f97316', shorthand: 'CHO' },
+  { id: 'ketone', name: 'Ketone', suffix: '-one', priority: 4, color: '#eab308', shorthand: '=O' },
+  { id: 'alcohol', name: 'Alcohol', suffix: '-ol', priority: 5, color: '#10b981', shorthand: 'OH' },
+  { id: 'amine', name: 'Amine', suffix: '-amine', priority: 6, color: '#06b6d4', shorthand: 'NH2' },
+  { id: 'alkene', name: 'Alkene', suffix: '-ene', priority: 7, color: '#3b82f6', shorthand: 'C=C' },
+  { id: 'alkyne', name: 'Alkyne', suffix: '-yne', priority: 8, color: '#8b5cf6', shorthand: 'C≡C' },
+  { id: 'alkane', name: 'Alkane', suffix: '-ane', priority: 9, color: '#6b7280', shorthand: 'C-C' },
+];
+
+const SUBSTITUENTS = [
+  { id: 'methyl', name: 'methyl', formula: 'CH3', color: '#6366f1' },
+  { id: 'ethyl', name: 'ethyl', formula: 'C2H5', color: '#a855f7' },
+  { id: 'chloro', name: 'chloro', formula: 'Cl', color: '#22c55e' },
+  { id: 'bromo', name: 'bromo', formula: 'Br', color: '#b45309' },
+  { id: 'fluoro', name: 'fluoro', formula: 'F', color: '#ec4899' },
+];
+
+const ALKANE_PREFIXES = {
+  1: 'meth',
+  2: 'eth',
+  3: 'prop',
+  4: 'but',
+  5: 'pent',
+  6: 'hex',
+  7: 'hept',
+  8: 'oct',
+  9: 'non',
+  10: 'dec',
+};
+
+// --- PRESET QUIZ QUESTIONS ---
+const QUIZ_QUESTIONS = [
+  {
+    id: 1,
+    question: "Name the saturated acyclic hydrocarbon with 5 carbons in a straight chain containing a single chlorine atom on the second carbon.",
+    options: ["2-chloropentane", "4-chloropentane", "2-chlorobutane", "1-chloro-1-methylbutane"],
+    correct: 0,
+    explanation: "First, identify the longest chain: 5 carbons (pentane). Number from the end closer to the substituent to give it the lowest number (C-2 instead of C-4). Thus, it is 2-chloropentane.",
+    difficulty: "Easy"
+  },
+  {
+    id: 2,
+    question: "Which of the following functional groups has the HIGHEST priority when numbering the parent carbon chain?",
+    options: ["Alcohol (-OH)", "Double Bond (Alkene)", "Carboxylic Acid (-COOH)", "Ketone (=O)"],
+    correct: 2,
+    explanation: "According to IUPAC priority rules, Carboxylic Acids (-COOH) have the highest priority, followed by Aldehydes, Ketones, Alcohols, Amines, Alkenes, Alkynes, and then Halogens/Alkyl groups.",
+    difficulty: "Medium"
+  },
+  {
+    id: 3,
+    question: "What is the correct IUPAC name for a 4-carbon chain containing a double bond between C-2 and C-3, and a methyl group on C-2?",
+    options: ["3-methylbut-2-ene", "2-methylbut-2-ene", "2-methylbut-3-ene", "3-methylbut-1-ene"],
+    correct: 1,
+    explanation: "The longest chain containing the double bond has 4 carbons (butene). Number from the side giving the double bond the lowest locant. From both sides, the double bond starts at C-2. To break the tie, number from the side giving the methyl group the lower number (C-2 instead of C-3). Thus, we get 2-methylbut-2-ene.",
+    difficulty: "Medium"
+  },
+  {
+    id: 4,
+    question: "How do you alphabetize the substituents 'ethyl' and 'dimethyl' when assembling a final IUPAC name?",
+    options: [
+      "Dimethyl comes first because 'd' comes before 'e'",
+      "Ethyl comes first because multiplying prefixes like 'di-' are ignored during alphabetization",
+      "Whichever is attached to the lower carbon number always comes first",
+      "They can be placed in any order"
+    ],
+    correct: 1,
+    explanation: "Multiplying prefixes (di, tri, tetra) and structural prefixes (sec-, tert-) are ignored during alphabetization. Therefore, we compare 'e' in ethyl with 'm' in methyl. Since 'e' comes before 'm', ethyl is listed first.",
+    difficulty: "Hard"
+  },
+  {
+    id: 5,
+    question: "What is the IUPAC name for CH₃-CH(OH)-CH₂-CO-CH₃?",
+    options: ["4-hydroxypentan-2-one", "2-hydroxypentan-4-one", "4-oxopentan-2-ol", "2-oxopentan-4-ol"],
+    correct: 0,
+    explanation: "This compound contains both a Ketone (=O on C-2 or C-4) and an Alcohol (-OH on C-2 or C-4). Ketone has higher priority than Alcohol, so the ketone carbon gets the lowest number possible (C-2). The carbon chain is numbered right-to-left: C1 (rightmost CH3), C2 (carbonyl), C3 (CH2), C4 (CH-OH), C5 (leftmost CH3). The alcohol becomes a substituent called 'hydroxy' at C-4. Thus, the name is 4-hydroxypentan-2-one.",
+    difficulty: "Hard"
+  }
+];
+
+// --- 3D MOLECULAR VIEWER COMPONENT ---
+function MoleculeThreeDViewer({ chainLength, saturation, unsaturatedPosition, principalGroup, substituents }) {
+  const containerRef = useRef(null);
+  const [threeLoaded, setThreeLoaded] = useState(false);
+  const [loadingError, setLoadingError] = useState(false);
+
+  // Dynamically load Three.js from CDN
+  useEffect(() => {
+    if (window.THREE) {
+      setThreeLoaded(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";
+    script.async = true;
+    script.onload = () => setThreeLoaded(true);
+    script.onerror = () => setLoadingError(true);
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (!threeLoaded || !containerRef.current) return;
+
+    const THREE = window.THREE;
+    const width = containerRef.current.clientWidth;
+    const height = containerRef.current.clientHeight;
+
+    // Create scene, camera, renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a); // Slate-900
+
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(0, 0, 12);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    containerRef.current.innerHTML = '';
+    containerRef.current.appendChild(renderer.domElement);
+
+    // Add Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight1.position.set(5, 10, 7);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.3); // Sky-blue ambient highlight
+    dirLight2.position.set(-5, -5, -5);
+    scene.add(dirLight2);
+
+    // Master Pivot Group
+    const masterGroup = new THREE.Group();
+    scene.add(masterGroup);
+
+    // Helper: Create Shiny Sphere
+    const createSphere = (color, radius, x, y, z) => {
+      const geom = new THREE.SphereGeometry(radius, 32, 32);
+      const mat = new THREE.MeshPhongMaterial({
+        color: color,
+        shininess: 90,
+        specular: 0x444444
+      });
+      const mesh = new THREE.Mesh(geom, mat);
+      mesh.position.set(x, y, z);
+      return mesh;
+    };
+
+    // Helper: Create Cylindrical Bond
+    const createBond = (p1, p2, color = 0x94a3b8, radius = 0.1, offsetZ = 0, offsetY = 0) => {
+      const pos1 = new THREE.Vector3(p1.x, p1.y, p1.z);
+      const pos2 = new THREE.Vector3(p2.x, p2.y, p2.z);
+
+      if (offsetZ !== 0 || offsetY !== 0) {
+        const shift = new THREE.Vector3(0, offsetY, offsetZ);
+        pos1.add(shift);
+        pos2.add(shift);
+      }
+
+      const direction = new THREE.Vector3().subVectors(pos2, pos1);
+      const length = direction.length();
+
+      const geom = new THREE.CylinderGeometry(radius, radius, length, 16);
+      const mat = new THREE.MeshPhongMaterial({ color: color, shininess: 80 });
+      const mesh = new THREE.Mesh(geom, mat);
+
+      const midpoint = new THREE.Vector3().addVectors(pos1, pos2).multiplyScalar(0.5);
+      mesh.position.copy(midpoint);
+
+      const upVec = new THREE.Vector3(0, 1, 0);
+      direction.normalize();
+      mesh.quaternion.setFromUnitVectors(upVec, direction);
+
+      return mesh;
+    };
+
+    // Calculate dynamic 3D zigzag positions for Carbon Atoms
+    const carbonPoints = [];
+    const spacingX = 1.4;
+    const offsetX = -((chainLength - 1) * spacingX) / 2;
+
+    for (let i = 0; i < chainLength; i++) {
+      const x = offsetX + i * spacingX;
+      const y = i % 2 === 0 ? 0.7 : -0.7;
+      carbonPoints.push({ x, y, z: 0, id: i + 1 });
+    }
+
+    // 1. Render bonds along the main chain
+    for (let i = 0; i < chainLength - 1; i++) {
+      const p1 = carbonPoints[i];
+      const p2 = carbonPoints[i + 1];
+      const isUnsat = saturation !== 'alkane' && (i + 1) === unsaturatedPosition;
+
+      if (isUnsat) {
+        if (saturation === 'alkene') {
+          // Double Bond: 2 parallel cylinders
+          masterGroup.add(createBond(p1, p2, 0x3b82f6, 0.08, 0.15, 0));
+          masterGroup.add(createBond(p1, p2, 0x3b82f6, 0.08, -0.15, 0));
+        } else if (saturation === 'alkyne') {
+          // Triple Bond: 3 parallel cylinders
+          masterGroup.add(createBond(p1, p2, 0x8b5cf6, 0.07, 0, 0));
+          masterGroup.add(createBond(p1, p2, 0x8b5cf6, 0.07, 0.18, 0.1));
+          masterGroup.add(createBond(p1, p2, 0x8b5cf6, 0.07, -0.18, -0.1));
+        }
+      } else {
+        // Single Bond
+        masterGroup.add(createBond(p1, p2, 0x94a3b8, 0.12, 0, 0));
+      }
+    }
+
+    // 2. Render Principal Functional Groups (Ball & Stick representation)
+    carbonPoints.forEach(pt => {
+      let isSpecial = false;
+
+      // Carboxylic Acid (-COOH) on C1
+      if (principalGroup === 'carboxylic_acid' && pt.id === 1) {
+        isSpecial = true;
+        // Double bond to Oxygen
+        const oxyDoublePos = { x: pt.x - 0.7, y: pt.y + 1.2, z: 0 };
+        masterGroup.add(createBond(pt, oxyDoublePos, 0xef4444, 0.06, 0.1, 0));
+        masterGroup.add(createBond(pt, oxyDoublePos, 0xef4444, 0.06, -0.1, 0));
+        masterGroup.add(createSphere(0xef4444, 0.45, oxyDoublePos.x, oxyDoublePos.y, oxyDoublePos.z)); // Oxygen
+
+        // Single bond to hydroxyl Oxygen
+        const oxySinglePos = { x: pt.x - 0.7, y: pt.y - 1.0, z: 0.5 };
+        masterGroup.add(createBond(pt, oxySinglePos, 0xef4444, 0.08, 0, 0));
+        masterGroup.add(createSphere(0xef4444, 0.45, oxySinglePos.x, oxySinglePos.y, oxySinglePos.z)); // Oxygen
+
+        // Hydroxyl Hydrogen
+        const hydroPos = { x: oxySinglePos.x - 0.5, y: oxySinglePos.y - 0.5, z: 0.8 };
+        masterGroup.add(createBond(oxySinglePos, hydroPos, 0xffffff, 0.05, 0, 0));
+        masterGroup.add(createSphere(0xffffff, 0.25, hydroPos.x, hydroPos.y, hydroPos.z)); // Hydrogen
+      }
+
+      // Ester (-COOCH3) on C1
+      else if (principalGroup === 'ester' && pt.id === 1) {
+        isSpecial = true;
+        // Double bond to Oxygen
+        const oxyDoublePos = { x: pt.x - 0.7, y: pt.y + 1.2, z: 0 };
+        masterGroup.add(createBond(pt, oxyDoublePos, 0xec4899, 0.06, 0.1, 0));
+        masterGroup.add(createBond(pt, oxyDoublePos, 0xec4899, 0.06, -0.1, 0));
+        masterGroup.add(createSphere(0xef4444, 0.45, oxyDoublePos.x, oxyDoublePos.y, oxyDoublePos.z)); // Oxygen
+
+        // Single bond to bridging Oxygen
+        const bridgeOxyPos = { x: pt.x - 0.7, y: pt.y - 1.0, z: 0.5 };
+        masterGroup.add(createBond(pt, bridgeOxyPos, 0xec4899, 0.08, 0, 0));
+        masterGroup.add(createSphere(0xef4444, 0.45, bridgeOxyPos.x, bridgeOxyPos.y, bridgeOxyPos.z)); // Oxygen
+
+        // Methyl Carbon
+        const methylCarbPos = { x: bridgeOxyPos.x - 1.0, y: bridgeOxyPos.y, z: 0.8 };
+        masterGroup.add(createBond(bridgeOxyPos, methylCarbPos, 0x94a3b8, 0.1, 0, 0));
+        masterGroup.add(createSphere(0x64748b, 0.5, methylCarbPos.x, methylCarbPos.y, methylCarbPos.z)); // Carbon
+      }
+
+      // Aldehyde (-CHO) on C1
+      else if (principalGroup === 'aldehyde' && pt.id === 1) {
+        isSpecial = true;
+        // Double bond to Oxygen
+        const oxyDoublePos = { x: pt.x - 0.7, y: pt.y + 1.2, z: 0 };
+        masterGroup.add(createBond(pt, oxyDoublePos, 0xf97316, 0.06, 0.1, 0));
+        masterGroup.add(createBond(pt, oxyDoublePos, 0xf97316, 0.06, -0.1, 0));
+        masterGroup.add(createSphere(0xef4444, 0.45, oxyDoublePos.x, oxyDoublePos.y, oxyDoublePos.z)); // Oxygen
+
+        // Single bond to Hydrogen
+        const hydroPos = { x: pt.x - 0.8, y: pt.y - 0.8, z: 0.5 };
+        masterGroup.add(createBond(pt, hydroPos, 0xffffff, 0.05, 0, 0));
+        masterGroup.add(createSphere(0xffffff, 0.25, hydroPos.x, hydroPos.y, hydroPos.z)); // Hydrogen
+      }
+
+      // Ketone (=O) on C2
+      else if (principalGroup === 'ketone' && pt.id === 2) {
+        const doubleOxyPos = { x: pt.x, y: pt.y > 0 ? pt.y + 1.2 : pt.y - 1.2, z: 0 };
+        masterGroup.add(createBond(pt, doubleOxyPos, 0xeab308, 0.06, 0, 0.1));
+        masterGroup.add(createBond(pt, doubleOxyPos, 0xeab308, 0.06, 0, -0.1));
+        masterGroup.add(createSphere(0xef4444, 0.45, doubleOxyPos.x, doubleOxyPos.y, doubleOxyPos.z)); // Oxygen
+      }
+
+      // Alcohol (-OH)
+      else if (principalGroup === 'alcohol' && pt.id === Math.min(3, chainLength)) {
+        const dir = pt.y > 0 ? 1 : -1;
+        const oxyPos = { x: pt.x, y: pt.y + 1.2 * dir, z: 0.4 };
+        masterGroup.add(createBond(pt, oxyPos, 0x10b981, 0.08, 0, 0));
+        masterGroup.add(createSphere(0xef4444, 0.45, oxyPos.x, oxyPos.y, oxyPos.z)); // Oxygen
+
+        const hydroPos = { x: oxyPos.x + 0.5, y: oxyPos.y + 0.4 * dir, z: 0.7 };
+        masterGroup.add(createBond(oxyPos, hydroPos, 0xffffff, 0.05, 0, 0));
+        masterGroup.add(createSphere(0xffffff, 0.25, hydroPos.x, hydroPos.y, hydroPos.z)); // Hydrogen
+      }
+
+      // Amine (-NH2)
+      else if (principalGroup === 'amine' && pt.id === Math.min(4, chainLength)) {
+        const dir = pt.y > 0 ? 1 : -1;
+        const nitrogenPos = { x: pt.x, y: pt.y + 1.2 * dir, z: 0.4 };
+        masterGroup.add(createBond(pt, nitrogenPos, 0x06b6d4, 0.08, 0, 0));
+        masterGroup.add(createSphere(0x3b82f6, 0.45, nitrogenPos.x, nitrogenPos.y, nitrogenPos.z)); // Nitrogen (Blue)
+
+        // Two Hydrogens
+        const h1 = { x: nitrogenPos.x - 0.5, y: nitrogenPos.y + 0.5 * dir, z: 0.8 };
+        const h2 = { x: nitrogenPos.x + 0.5, y: nitrogenPos.y + 0.5 * dir, z: 0.8 };
+        masterGroup.add(createBond(nitrogenPos, h1, 0xffffff, 0.05, 0, 0));
+        masterGroup.add(createBond(nitrogenPos, h2, 0xffffff, 0.05, 0, 0));
+        masterGroup.add(createSphere(0xffffff, 0.25, h1.x, h1.y, h1.z));
+        masterGroup.add(createSphere(0xffffff, 0.25, h2.x, h2.y, h2.z));
+      }
+
+      // Default central Carbon Sphere rendering
+      masterGroup.add(createSphere(0x475569, 0.55, pt.x, pt.y, pt.z));
+    });
+
+    // 3. Render Substituents (Alkyls / Halogens)
+    Object.entries(substituents).forEach(([idxStr, type]) => {
+      const idx = Number(idxStr);
+      const pt = carbonPoints[idx - 1];
+      if (!pt) return;
+
+      const subConfig = SUBSTITUENTS.find(s => s.id === type);
+      const hexColor = subConfig ? parseInt(subConfig.color.replace('#', '0x')) : 0xcbd5e1;
+
+      const dir = pt.y > 0 ? -1 : 1; // Project away from chain zigzag
+      const subPos = { x: pt.x, y: pt.y + 1.3 * dir, z: 0 };
+
+      if (type === 'methyl') {
+        masterGroup.add(createBond(pt, subPos, hexColor, 0.08, 0, 0));
+        masterGroup.add(createSphere(0x64748b, 0.5, subPos.x, subPos.y, subPos.z)); // Carbon
+        // Render 3 tiny hydrogens surrounding the methyl group
+        const h1 = { x: subPos.x - 0.4, y: subPos.y + 0.3 * dir, z: 0.4 };
+        const h2 = { x: subPos.x + 0.4, y: subPos.y + 0.3 * dir, z: 0.4 };
+        const h3 = { x: subPos.x, y: subPos.y + 0.5 * dir, z: -0.4 };
+        masterGroup.add(createBond(subPos, h1, 0xffffff, 0.04));
+        masterGroup.add(createBond(subPos, h2, 0xffffff, 0.04));
+        masterGroup.add(createBond(subPos, h3, 0xffffff, 0.04));
+        masterGroup.add(createSphere(0xffffff, 0.22, h1.x, h1.y, h1.z));
+        masterGroup.add(createSphere(0xffffff, 0.22, h2.x, h2.y, h2.z));
+        masterGroup.add(createSphere(0xffffff, 0.22, h3.x, h3.y, h3.z));
+      } else if (type === 'ethyl') {
+        // Multi-carbon branch (two interconnected slate spheres)
+        const firstCarbon = subPos;
+        const secondCarbon = { x: subPos.x - 0.8, y: subPos.y + 0.8 * dir, z: 0.3 };
+
+        masterGroup.add(createBond(pt, firstCarbon, hexColor, 0.08));
+        masterGroup.add(createSphere(0x64748b, 0.5, firstCarbon.x, firstCarbon.y, firstCarbon.z));
+
+        masterGroup.add(createBond(firstCarbon, secondCarbon, hexColor, 0.08));
+        masterGroup.add(createSphere(0x64748b, 0.5, secondCarbon.x, secondCarbon.y, secondCarbon.z));
+      } else {
+        // Halogen Atom Sphere (Cl, Br, F)
+        masterGroup.add(createBond(pt, subPos, hexColor, 0.08, 0, 0));
+        masterGroup.add(createSphere(hexColor, 0.48, subPos.x, subPos.y, subPos.z));
+      }
+    });
+
+    // --- Interactive Rotation Logic (Mouse Drag & Touch Sweep) ---
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+
+    const handleStart = (clientX, clientY) => {
+      isDragging = true;
+      previousMousePosition = { x: clientX, y: clientY };
+    };
+
+    const handleMove = (clientX, clientY) => {
+      if (!isDragging) return;
+      const deltaX = clientX - previousMousePosition.x;
+      const deltaY = clientY - previousMousePosition.y;
+
+      masterGroup.rotation.y += deltaX * 0.01;
+      masterGroup.rotation.x += deltaY * 0.01;
+
+      previousMousePosition = { x: clientX, y: clientY };
+    };
+
+    const handleEnd = () => {
+      isDragging = false;
+    };
+
+    // Attach listeners directly to canvas
+    const dom = renderer.domElement;
+    dom.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
+    dom.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', handleEnd);
+
+    dom.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        handleStart(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    dom.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1) {
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', handleEnd);
+
+    // Initial slow rotation
+    masterGroup.rotation.y = 0.4;
+    masterGroup.rotation.x = 0.25;
+
+    // Animation loop
+    let reqId;
+    const animate = () => {
+      reqId = requestAnimationFrame(animate);
+      if (!isDragging) {
+        masterGroup.rotation.y += 0.003; // Gentle idle spin
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Clean-up on unmount/state changes
+    return () => {
+      cancelAnimationFrame(reqId);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchend', handleEnd);
+      if (containerRef.current) {
+        containerRef.current.innerHTML = '';
+      }
+    };
+  }, [threeLoaded, chainLength, saturation, unsaturatedPosition, principalGroup, substituents]);
+
+  if (loadingError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-slate-950 rounded-xl border border-red-500/20 p-6">
+        <p className="text-xs text-red-400 font-bold">Failed to load the 3D graphics environment. Please check your network connection.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full relative overflow-hidden bg-slate-950 rounded-xl">
+      {!threeLoaded && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-950 z-20">
+          <div className="w-10 h-10 border-4 border-sky-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-xs text-slate-400 font-bold tracking-wider">Compiling WebGL Scene...</span>
+        </div>
+      )}
+      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      <div className="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-sm border border-slate-800 rounded-lg px-3 py-1 text-[10px] text-slate-400 font-bold pointer-events-none select-none">
+        Drag to Orbit Molecule
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('builder'); 
+  const [viewMode, setViewMode] = useState('3d'); // '3d' or '2d'
+  
+  // --- BUILDER STATE ---
+  const [chainLength, setChainLength] = useState(6); 
+  const [saturation, setSaturation] = useState('alkane'); 
+  const [unsaturatedPosition, setUnsaturatedPosition] = useState(2); 
+  const [principalGroup, setPrincipalGroup] = useState('none'); 
+  const [substituents, setSubstituents] = useState({}); 
+  const [namingOutput, setNamingOutput] = useState({ name: '', steps: [] });
+
+  // --- QUIZ STATE ---
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+
+  // --- SOLVE IUPAC NAME ON STATE CHANGE ---
+  useEffect(() => {
+    if (activeTab === 'builder') {
+      solveIupacName();
+    }
+  }, [chainLength, saturation, unsaturatedPosition, principalGroup, substituents]);
+
+  // Handle setting valid unsaturated bond position when chain length changes
+  useEffect(() => {
+    if (unsaturatedPosition >= chainLength) {
+      setUnsaturatedPosition(Math.max(1, chainLength - 1));
+    }
+  }, [chainLength]);
+
+  const addSubstituent = (carbonIndex, subType) => {
+    if (carbonIndex === 1 && (principalGroup === 'carboxylic_acid' || principalGroup === 'aldehyde' || principalGroup === 'ester')) return;
+    
+    setSubstituents(prev => {
+      const updated = { ...prev };
+      if (subType === 'none') {
+        delete updated[carbonIndex];
+      } else {
+        updated[carbonIndex] = subType;
+      }
+      return updated;
+    });
+  };
+
+  // --- IUPAC NAME DETERMINISTIC SOLVER ENGINE ---
+  const solveIupacName = () => {
+    let steps = [];
+    let carbonChain = Array.from({ length: chainLength }, (_, i) => i + 1);
+
+    steps.push({
+      title: "Step 1: Identify Principal Functional Group & Parent Suffix",
+      desc: `We analyze the molecule for high-priority functional groups. Our central group is: **${
+        principalGroup === 'none' ? 'None (Alkane/Alkene/Alkyne only)' : principalGroup.replace('_', ' ').toUpperCase()
+      }**.`,
+      badge: principalGroup === 'none' ? 'Hydrocarbon' : 'Functional Group'
+    });
+
+    let primarySuffix = 'ane';
+    if (saturation === 'alkene') primarySuffix = 'ene';
+    if (saturation === 'alkyne') primarySuffix = 'yne';
+
+    let principalSuffix = '';
+    let suffixPriority = 10; 
+
+    if (principalGroup === 'carboxylic_acid') {
+      principalSuffix = 'oic acid';
+      suffixPriority = 1;
+    } else if (principalGroup === 'ester') {
+      principalSuffix = 'oate';
+      suffixPriority = 2;
+    } else if (principalGroup === 'aldehyde') {
+      principalSuffix = 'al';
+      suffixPriority = 3;
+    } else if (principalGroup === 'ketone') {
+      principalSuffix = 'one';
+      suffixPriority = 4;
+    } else if (principalGroup === 'alcohol') {
+      principalSuffix = 'ol';
+      suffixPriority = 5;
+    } else if (principalGroup === 'amine') {
+      principalSuffix = 'amine';
+      suffixPriority = 6;
+    }
+
+    let ltrScore = [];
+    let rtlScore = [];
+
+    let principalPosLtr = null;
+    let principalPosRtl = null;
+
+    if (principalGroup === 'carboxylic_acid' || principalGroup === 'aldehyde' || principalGroup === 'ester') {
+      principalPosLtr = 1;
+      principalPosRtl = 1;
+    } else if (principalGroup === 'ketone') {
+      principalPosLtr = 2;
+      principalPosRtl = chainLength - 1;
+    } else if (principalGroup === 'alcohol') {
+      principalPosLtr = Math.min(3, chainLength);
+      principalPosRtl = chainLength - principalPosLtr + 1;
+    } else if (principalGroup === 'amine') {
+      principalPosLtr = Math.min(4, chainLength);
+      principalPosRtl = chainLength - principalPosLtr + 1;
+    }
+
+    if (principalPosLtr !== null) {
+      ltrScore.push(principalPosLtr);
+      rtlScore.push(principalPosRtl);
+    }
+
+    let unsatLtr = saturation !== 'alkane' ? unsaturatedPosition : null;
+    let unsatRtl = saturation !== 'alkane' ? (chainLength - unsaturatedPosition) : null;
+    if (unsatLtr !== null) {
+      ltrScore.push(unsatLtr);
+      rtlScore.push(unsatRtl);
+    }
+
+    let subPositionsLtr = Object.keys(substituents).map(Number).sort((a,b) => a-b);
+    let subPositionsRtl = Object.keys(substituents).map(Number).map(pos => chainLength - pos + 1).sort((a,b) => a-b);
+
+    if (subPositionsLtr.length > 0) {
+      ltrScore.push(...subPositionsLtr);
+      rtlScore.push(...subPositionsRtl);
+    }
+
+    let useLtr = true;
+    let explanationDirection = "";
+
+    for (let i = 0; i < Math.max(ltrScore.length, rtlScore.length); i++) {
+      let lVal = ltrScore[i] || 999;
+      let rVal = rtlScore[i] || 999;
+      if (lVal < rVal) {
+        useLtr = true;
+        explanationDirection = `Left-to-Right gives lower numbering set: [${ltrScore.join(',')}] vs Right-to-Left: [${rtlScore.join(',')}].`;
+        break;
+      } else if (rVal < lVal) {
+        useLtr = false;
+        explanationDirection = `Right-to-Left gives lower numbering set: [${rtlScore.join(',')}] vs Left-to-Right: [${ltrScore.join(',')}].`;
+        break;
+      }
+    }
+
+    if (!explanationDirection) {
+      useLtr = true;
+      explanationDirection = "Both directions yield symmetrical coordinates. Defaulting to Left-to-Right.";
+    }
+
+    steps.push({
+      title: "Step 2: Numbering the Parent Carbon Chain",
+      desc: `We compare numbering direction to give priority groups the lowest possible coordinates (locants). Direction chosen: **${useLtr ? 'Left-to-Right' : 'Right-to-Left'}**. Reason: ${explanationDirection}`,
+      badge: "Direction Decided"
+    });
+
+    let mappedSubstituents = [];
+    Object.entries(substituents).forEach(([index, type]) => {
+      let numIndex = Number(index);
+      let finalIndex = useLtr ? numIndex : (chainLength - numIndex + 1);
+      mappedSubstituents.push({ originalIdx: numIndex, locant: finalIndex, name: type });
+    });
+
+    let finalUnsatLocant = useLtr ? unsatLtr : unsatRtl;
+    let finalPrincipalLocant = useLtr ? principalPosLtr : principalPosRtl;
+
+    let groupedSubs = {};
+    mappedSubstituents.forEach(sub => {
+      if (!groupedSubs[sub.name]) {
+        groupedSubs[sub.name] = [];
+      }
+      groupedSubs[sub.name].push(sub.locant);
+    });
+
+    Object.keys(groupedSubs).forEach(name => {
+      groupedSubs[name].sort((a,b) => a-b);
+    });
+
+    let alphabetizedSubNames = Object.keys(groupedSubs).sort();
+    let prefixParts = [];
+    let substituentStepDetails = [];
+
+    alphabetizedSubNames.forEach(name => {
+      let locants = groupedSubs[name];
+      let prefix = "";
+      if (locants.length === 1) {
+        prefix = `${locants[0]}-${name}`;
+      } else if (locants.length === 2) {
+        prefix = `${locants.join(',')}-di${name}`;
+      } else if (locants.length === 3) {
+        prefix = `${locants.join(',')}-tri${name}`;
+      }
+      prefixParts.push(prefix);
+      substituentStepDetails.push(`${name.toUpperCase()} at carbon(s) ${locants.join(', ')}`);
+    });
+
+    steps.push({
+      title: "Step 3: Identify & Organize Substituents",
+      desc: substituentStepDetails.length > 0 
+        ? `We found the following substituents, sorted alphabetically: ${substituentStepDetails.join(', ')}. Assembled prefix: **${prefixParts.join('-')}**`
+        : "No alkyl or halogen substituents detected attached to the chain.",
+      badge: "Substituents Sorted"
+    });
+
+    let rootWord = ALKANE_PREFIXES[chainLength] || 'alk';
+    let assembledName = "";
+    let endSuffix = "";
+
+    if (principalGroup === 'none') {
+      if (saturation === 'alkane') {
+        endSuffix = "ane";
+      } else {
+        endSuffix = `-${finalUnsatLocant}-${primarySuffix}`;
+      }
+    } else {
+      let satInfix = "an"; 
+      if (saturation === 'alkene') satInfix = `-${finalUnsatLocant}-en`;
+      if (saturation === 'alkyne') satInfix = `-${finalUnsatLocant}-yn`;
+
+      if (principalGroup === 'carboxylic_acid') {
+        endSuffix = `${satInfix}-oic acid`; 
+      } else if (principalGroup === 'ester') {
+        endSuffix = `${satInfix}-oate`; 
+      } else if (principalGroup === 'aldehyde') {
+        endSuffix = `${satInfix}-al`; 
+      } else if (principalGroup === 'ketone') {
+        endSuffix = `${satInfix}-${finalPrincipalLocant}-one`;
+      } else if (principalGroup === 'alcohol') {
+        endSuffix = `${satInfix}-${finalPrincipalLocant}-ol`;
+      } else if (principalGroup === 'amine') {
+        endSuffix = `${satInfix}-${finalPrincipalLocant}-amine`;
+      }
+    }
+
+    let finalPrefix = prefixParts.length > 0 ? `${prefixParts.join('-')}-` : "";
+    assembledName = `${finalPrefix}${rootWord}${endSuffix}`;
+
+    assembledName = assembledName.replace(/-+/g, '-').replace(/-$/, '').toLowerCase();
+    assembledName = assembledName.charAt(0).toUpperCase() + assembledName.slice(1);
+
+    if (principalGroup === 'ester') {
+      assembledName = "Methyl " + assembledName;
+    }
+
+    steps.push({
+      title: "Step 4: Formulate Parent Stem and Assemble IUPAC Name",
+      desc: `Combined Parent stem: **${rootWord.toUpperCase()}** + Saturation infix: **${saturation.toUpperCase()}** + Principal Group suffix. Final complete assembled name is: **${assembledName}**.`,
+      badge: "Final Assembly"
+    });
+
+    setNamingOutput({ name: assembledName, steps });
+  };
+
+  // --- RENDERING 2D CHEMICAL STRUCTURE (SVG) ---
+  const renderChemicalStructure2D = () => {
+    let points = [];
+    const width = 720;
+    const height = 220;
+    const startX = 50;
+    const spacingX = (width - 100) / (chainLength - 1 || 1);
+
+    for (let i = 0; i < chainLength; i++) {
+      let x = startX + i * spacingX;
+      let y = i % 2 === 0 ? 140 : 80;
+      points.push({ x, y, id: i + 1 });
+    }
+
+    return (
+      <svg className="w-full h-full bg-slate-900 rounded-xl overflow-hidden" viewBox={`0 0 ${width} ${height}`}>
+        {/* Draw Bonds */}
+        {points.map((pt, idx) => {
+          if (idx === 0) return null;
+          const prevPt = points[idx - 1];
+          const isDouble = saturation === 'alkene' && idx === unsaturatedPosition;
+          const isTriple = saturation === 'alkyne' && idx === unsaturatedPosition;
+
+          if (isDouble) {
+            return (
+              <g key={`bond-${idx}`}>
+                <line x1={prevPt.x} y1={prevPt.y - 3} x2={pt.x} y2={pt.y - 3} stroke="#3b82f6" strokeWidth="4" />
+                <line x1={prevPt.x} y1={prevPt.y + 3} x2={pt.x} y2={pt.y + 3} stroke="#3b82f6" strokeWidth="4" />
+                <text x={(prevPt.x + pt.x)/2} y={(prevPt.y + pt.y)/2 - 12} fill="#3b82f6" className="text-[10px] font-bold" textAnchor="middle">Double</text>
+              </g>
+            );
+          } else if (isTriple) {
+            return (
+              <g key={`bond-${idx}`}>
+                <line x1={prevPt.x} y1={prevPt.y - 5} x2={pt.x} y2={pt.y - 5} stroke="#8b5cf6" strokeWidth="3" />
+                <line x1={prevPt.x} y1={prevPt.y} x2={pt.x} y2={pt.y} stroke="#8b5cf6" strokeWidth="3" />
+                <line x1={prevPt.x} y1={prevPt.y + 5} x2={pt.x} y2={pt.y + 5} stroke="#8b5cf6" strokeWidth="3" />
+                <text x={(prevPt.x + pt.x)/2} y={(prevPt.y + pt.y)/2 - 14} fill="#8b5cf6" className="text-[10px] font-bold" textAnchor="middle">Triple</text>
+              </g>
+            );
+          } else {
+            return (
+              <line key={`bond-${idx}`} x1={prevPt.x} y1={prevPt.y} x2={pt.x} y2={pt.y} stroke="#94a3b8" strokeWidth="3" />
+            );
+          }
+        })}
+
+        {/* Draw Principal Functional Groups */}
+        {points.map((pt) => {
+          let hasGroup = false;
+          let groupLabel = "";
+          let groupColor = "";
+
+          if (principalGroup === 'carboxylic_acid' && pt.id === 1) {
+            hasGroup = true;
+            groupLabel = "COOH";
+            groupColor = "#ef4444";
+          } else if (principalGroup === 'ester' && pt.id === 1) {
+            hasGroup = true;
+            groupLabel = "COOMe";
+            groupColor = "#ec4899";
+          } else if (principalGroup === 'aldehyde' && pt.id === 1) {
+            hasGroup = true;
+            groupLabel = "CHO";
+            groupColor = "#f97316";
+          } else if (principalGroup === 'ketone' && pt.id === 2) {
+            hasGroup = true;
+            groupLabel = "=O";
+            groupColor = "#eab308";
+          } else if (principalGroup === 'alcohol' && pt.id === Math.min(3, chainLength)) {
+            hasGroup = true;
+            groupLabel = "-OH";
+            groupColor = "#10b981";
+          } else if (principalGroup === 'amine' && pt.id === Math.min(4, chainLength)) {
+            hasGroup = true;
+            groupLabel = "-NH2";
+            groupColor = "#06b6d4";
+          }
+
+          if (!hasGroup) return null;
+
+          return (
+            <g key={`p-group-${pt.id}`}>
+              <line x1={pt.x} y1={pt.y} x2={pt.x} y2={pt.y > 100 ? pt.y + 35 : pt.y - 35} stroke={groupColor} strokeWidth="2.5" strokeDasharray="3,3" />
+              <circle cx={pt.x} cy={pt.y > 100 ? pt.y + 35 : pt.y - 35} r="18" fill={groupColor} className="animate-pulse" />
+              <text x={pt.x} y={pt.y > 100 ? pt.y + 39 : pt.y - 31} fill="#ffffff" className="text-[10px] font-black" textAnchor="middle">
+                {groupLabel}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Draw Substituents */}
+        {Object.entries(substituents).map(([idxStr, type]) => {
+          const idx = Number(idxStr);
+          const pt = points[idx - 1];
+          if (!pt) return null;
+
+          const subConfig = SUBSTITUENTS.find(s => s.id === type);
+          const color = subConfig ? subConfig.color : "#cbd5e1";
+          const formula = subConfig ? subConfig.formula : "R";
+          const dirY = pt.y > 100 ? -40 : 40;
+
+          return (
+            <g key={`sub-${idx}`}>
+              <line x1={pt.x} y1={pt.y} x2={pt.x} y2={pt.y + dirY} stroke={color} strokeWidth="2.5" />
+              <circle cx={pt.x} cy={pt.y + dirY} r="16" fill={color} />
+              <text x={pt.x} y={pt.y + dirY + 4} fill="#ffffff" className="text-[10px] font-black" textAnchor="middle">
+                {formula}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Draw Carbon Atoms (Nodes) */}
+        {points.map((pt) => {
+          return (
+            <g key={`node-${pt.id}`}>
+              <circle cx={pt.x} cy={pt.y} r="14" fill="#1e293b" stroke="#38bdf8" strokeWidth="2" />
+              <text x={pt.x} y={pt.y + 4} fill="#f8fafc" className="text-xs font-bold" textAnchor="middle">
+                {`C${pt.id}`}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  };
+
+  // --- QUIZ SUBMISSION HANDLER ---
+  const handleQuizAnswer = (idx) => {
+    if (quizSubmitted) return;
+    setSelectedOption(idx);
+  };
+
+  const submitQuizAnswer = () => {
+    if (selectedOption === null) return;
+    setQuizSubmitted(true);
+    if (selectedOption === QUIZ_QUESTIONS[currentQuizIndex].correct) {
+      setQuizScore(prev => prev + 1);
+    }
+  };
+
+  const nextQuizQuestion = () => {
+    setSelectedOption(null);
+    setQuizSubmitted(false);
+    if (currentQuizIndex < QUIZ_QUESTIONS.length - 1) {
+      setCurrentQuizIndex(prev => prev + 1);
+    } else {
+      setCurrentQuizIndex(0);
+      setQuizScore(0);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-sky-500 selection:text-white">
+      {/* Header Banner */}
+      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-sky-500 p-2.5 rounded-xl text-slate-950 shadow-lg shadow-sky-500/20">
+              <FlaskConical className="w-6 h-6 stroke-[2.5]" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight text-white flex items-center gap-2">
+                IUPAC Nomenclature Explorer
+                <span className="text-xs bg-sky-500/15 text-sky-400 px-2 py-0.5 rounded-full font-bold">Interactive Tool v2.0 - 3D edition</span>
+              </h1>
+              <p className="text-xs text-slate-400">Interactive organic chemistry modeler with a real-time webGL 3D molecular sandbox</p>
+            </div>
+          </div>
+          
+          {/* Navigation Tabs */}
+          <nav className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button 
+              onClick={() => setActiveTab('builder')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${activeTab === 'builder' ? 'bg-sky-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Interactive Builder
+            </button>
+            <button 
+              onClick={() => setActiveTab('rules')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${activeTab === 'rules' ? 'bg-sky-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              Nomenclature Rules
+            </button>
+            <button 
+              onClick={() => setActiveTab('quiz')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${activeTab === 'quiz' ? 'bg-sky-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              Nomenclature Quiz
+            </button>
+          </nav>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 gap-6">
+        
+        {/* TAB 1: BUILDER & RESOLVER */}
+        {activeTab === 'builder' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Left side: Configuration Panel */}
+            <section className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col gap-6 shadow-xl shadow-slate-950/50">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h2 className="text-md font-extrabold flex items-center gap-2 text-sky-400">
+                  <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+                  Molecule Customization
+                </h2>
+                <button 
+                  onClick={() => {
+                    setChainLength(6);
+                    setSaturation('alkane');
+                    setPrincipalGroup('none');
+                    setSubstituents({});
+                  }}
+                  className="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 hover:underline"
+                >
+                  <RotateCcw className="w-3 h-3" /> Reset
+                </button>
+              </div>
+
+              {/* Slider: Parent Carbon Chain Length */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Parent Chain Length</label>
+                  <span className="text-sm bg-sky-500/10 text-sky-400 px-2.5 py-0.5 rounded-full font-bold">
+                    {chainLength} Carbons ({ALKANE_PREFIXES[chainLength] || 'alk'}-)
+                  </span>
+                </div>
+                <input 
+                  type="range" 
+                  min="3" 
+                  max="10" 
+                  value={chainLength} 
+                  onChange={(e) => setChainLength(Number(e.target.value))}
+                  className="w-full accent-sky-500 bg-slate-850 h-2 rounded-lg cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 font-bold px-1">
+                  <span>Prop (3)</span>
+                  <span>Hex (6)</span>
+                  <span>Oct (8)</span>
+                  <span>Dec (10)</span>
+                </div>
+              </div>
+
+              {/* Selector: Primary Saturation (Double/Triple bonds) */}
+              <div className="space-y-3">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">Carbon-Carbon Saturation</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['alkane', 'alkene', 'alkyne'].map((sat) => (
+                    <button
+                      key={sat}
+                      onClick={() => setSaturation(sat)}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold capitalize transition-all duration-150 ${
+                        saturation === sat 
+                          ? 'bg-sky-500/15 border-sky-500 text-sky-400' 
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850'
+                      }`}
+                    >
+                      {sat === 'alkane' ? 'Single (-ane)' : sat === 'alkene' ? 'Double (-ene)' : 'Triple (-yne)'}
+                    </button>
+                  ))}
+                </div>
+
+                {saturation !== 'alkane' && (
+                  <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-slate-400 font-bold">Multiple Bond Position:</span>
+                      <span className="text-sky-400 font-black">Carbon C-{unsaturatedPosition} to C-{unsaturatedPosition + 1}</span>
+                    </div>
+                    <input 
+                      type="range" 
+                      min="1" 
+                      max={chainLength - 1} 
+                      value={unsaturatedPosition} 
+                      onChange={(e) => setUnsaturatedPosition(Number(e.target.value))}
+                      className="w-full accent-sky-500 h-1 bg-slate-800 rounded-lg"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Selector: Principal Functional Groups */}
+              <div className="space-y-3">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">Principal Functional Group</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPrincipalGroup('none')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all duration-150 ${
+                      principalGroup === 'none' 
+                        ? 'bg-sky-500/15 border-sky-500 text-sky-400' 
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-white'
+                    }`}
+                  >
+                    None (Alkane only)
+                  </button>
+                  {FUNCTIONAL_GROUPS.filter(g => g.id !== 'alkane' && g.id !== 'alkene' && g.id !== 'alkyne').map((group) => (
+                    <button
+                      key={group.id}
+                      onClick={() => {
+                        setPrincipalGroup(group.id);
+                        if (group.id === 'carboxylic_acid' || group.id === 'aldehyde' || group.id === 'ester') {
+                          addSubstituent(1, 'none');
+                        }
+                      }}
+                      className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-between transition-all duration-150 ${
+                        principalGroup === group.id 
+                          ? 'bg-sky-500/15 border-sky-500 text-sky-400' 
+                          : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-white'
+                      }`}
+                    >
+                      <span>{group.name}</span>
+                      <span className="text-[10px] bg-slate-850 text-slate-300 px-1.5 py-0.5 rounded font-mono font-bold">{group.shorthand}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section: Carbon-by-Carbon Substituent Placer */}
+              <div className="space-y-3 border-t border-slate-800 pt-4">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider block">Add Substituents to Carbons</label>
+                <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                  {Array.from({ length: chainLength }, (_, idx) => {
+                    const carbonNum = idx + 1;
+                    const isC1Disabled = (principalGroup === 'carboxylic_acid' || principalGroup === 'aldehyde' || principalGroup === 'ester') && carbonNum === 1;
+
+                    return (
+                      <div key={`carbon-row-${carbonNum}`} className={`flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-slate-850 ${isC1Disabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-sky-500/15 border border-sky-500/30 text-sky-400 text-xs flex items-center justify-center font-bold">
+                            C{carbonNum}
+                          </span>
+                          <span className="text-xs text-slate-400">Substituent:</span>
+                        </div>
+
+                        <select
+                          value={substituents[carbonNum] || 'none'}
+                          onChange={(e) => addSubstituent(carbonNum, e.target.value)}
+                          className="bg-slate-900 text-xs font-bold rounded-lg border border-slate-800 px-3 py-1.5 text-slate-200 outline-none focus:border-sky-500 cursor-pointer"
+                        >
+                          <option value="none">-- None --</option>
+                          {SUBSTITUENTS.map((sub) => (
+                            <option key={sub.id} value={sub.id}>{sub.name} (-{sub.formula})</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+
+            {/* Right side: Molecular Viewer & Step-by-Step Solver */}
+            <section className="lg:col-span-7 flex flex-col gap-6">
+              
+              {/* Dual 3D/2D Molecular Output Frame */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-sky-400" />
+                    Molecular Visualization
+                  </h3>
+                  
+                  {/* Mode Toggler */}
+                  <div className="bg-slate-950 border border-slate-800 p-0.5 rounded-lg flex items-center">
+                    <button
+                      onClick={() => setViewMode('3d')}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                        viewMode === '3d' ? 'bg-sky-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Box className="w-3.5 h-3.5" />
+                      3D Ball-and-Stick
+                    </button>
+                    <button
+                      onClick={() => setViewMode('2d')}
+                      className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                        viewMode === '2d' ? 'bg-sky-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      2D Flat
+                    </button>
+                  </div>
+                </div>
+
+                {/* Viewport Render Space */}
+                <div className="w-full h-[260px] bg-slate-950 rounded-xl overflow-hidden relative border border-slate-800">
+                  {viewMode === '3d' ? (
+                    <MoleculeThreeDViewer 
+                      chainLength={chainLength}
+                      saturation={saturation}
+                      unsaturatedPosition={unsaturatedPosition}
+                      principalGroup={principalGroup}
+                      substituents={substituents}
+                    />
+                  ) : (
+                    renderChemicalStructure2D()
+                  )}
+                </div>
+              </div>
+
+              {/* Solved IUPAC Name Result */}
+              <div className="bg-gradient-to-r from-sky-500/20 via-blue-500/10 to-transparent border border-sky-500/40 rounded-2xl p-5 shadow-lg shadow-sky-500/5 flex flex-col gap-2">
+                <span className="text-xs font-bold text-sky-400 uppercase tracking-widest">Derived IUPAC Name</span>
+                <div className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-3">
+                  {namingOutput.name}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">This name is strictly generated following full IUPAC Blue Book naming standards for acyclic parent chains.</p>
+              </div>
+
+              {/* Step by Step Logic Panel */}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider border-b border-slate-800 pb-2">
+                  Step-by-Step Naming Determination
+                </h3>
+                
+                <div className="space-y-4">
+                  {namingOutput.steps.map((step, idx) => (
+                    <div key={`step-${idx}`} className="flex gap-4 relative">
+                      {idx < namingOutput.steps.length - 1 && (
+                        <div className="absolute left-3 top-6 bottom-[-20px] w-0.5 bg-slate-800"></div>
+                      )}
+                      
+                      <div className="w-7.5 h-7.5 rounded-full bg-slate-950 border-2 border-sky-400/80 text-sky-400 text-xs flex items-center justify-center font-black z-10 shrink-0">
+                        {idx + 1}
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-sm font-extrabold text-white">{step.title}</h4>
+                          <span className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-bold">
+                            {step.badge}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed" dangerouslySetInnerHTML={{ __html: step.desc }}></p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </section>
+
+          </div>
+        )}
+
+        {/* TAB 2: RULES CHEAT SHEET & HIERARCHY */}
+        {activeTab === 'rules' && (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-8 max-w-4xl mx-auto">
+            
+            <div className="space-y-2 border-b border-slate-800 pb-4">
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <BookOpen className="text-sky-500 w-6 h-6" />
+                IUPAC Systematic Naming Rules
+              </h2>
+              <p className="text-sm text-slate-400">The core structural steps to assign an undisputed name to any acyclic organic molecule.</p>
+            </div>
+
+            {/* Standard Naming Formula */}
+            <div className="bg-slate-950 border border-slate-850 rounded-2xl p-5 space-y-3">
+              <span className="text-xs font-black uppercase text-slate-400 tracking-wider">The IUPAC Naming Formula</span>
+              <div className="flex flex-col md:flex-row gap-2 text-center text-xs font-bold text-white justify-center items-center">
+                <div className="bg-indigo-500/25 border border-indigo-500/40 p-3 rounded-xl w-full">
+                  <div className="text-indigo-400 text-[10px] uppercase font-black tracking-widest">Substituents</div>
+                  <div className="text-sm font-black mt-1">Prefix</div>
+                </div>
+                <ChevronRight className="text-slate-600 hidden md:block" />
+                <div className="bg-sky-500/25 border border-sky-500/40 p-3 rounded-xl w-full">
+                  <div className="text-sky-400 text-[10px] uppercase font-black tracking-widest">Main Carbons</div>
+                  <div className="text-sm font-black mt-1">Root Word</div>
+                </div>
+                <ChevronRight className="text-slate-600 hidden md:block" />
+                <div className="bg-violet-500/25 border border-violet-500/40 p-3 rounded-xl w-full">
+                  <div className="text-violet-400 text-[10px] uppercase font-black tracking-widest">Saturation (C=C)</div>
+                  <div className="text-sm font-black mt-1">Primary Infix</div>
+                </div>
+                <ChevronRight className="text-slate-600 hidden md:block" />
+                <div className="bg-emerald-500/25 border border-emerald-500/40 p-3 rounded-xl w-full">
+                  <div className="text-emerald-400 text-[10px] uppercase font-black tracking-widest">Principal Group</div>
+                  <div className="text-sm font-black mt-1">Secondary Suffix</div>
+                </div>
+              </div>
+            </div>
+
+            {/* IUPAC Functional Group Priority Table */}
+            <div className="space-y-4 border-t border-slate-800 pt-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-black uppercase text-slate-400 tracking-wider">Functional Group Priority Hierarchy</h3>
+                <span className="text-[10px] bg-red-500/15 text-red-400 px-2 py-0.5 rounded font-bold uppercase tracking-wide">High Priority to Low</span>
+              </div>
+
+              <div className="border border-slate-850 rounded-xl overflow-hidden">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-950 text-slate-400 border-b border-slate-850 font-black">
+                      <th className="p-3">Priority</th>
+                      <th className="p-3">Functional Class</th>
+                      <th className="p-3">Formula</th>
+                      <th className="p-3">Prefix (as substituent)</th>
+                      <th className="p-3">Suffix (as principal)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-850 text-slate-300">
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-red-400">1</td>
+                      <td className="p-3 text-white font-bold">Carboxylic Acid</td>
+                      <td className="p-3 font-mono">-COOH</td>
+                      <td className="p-3 text-slate-400">carboxy-</td>
+                      <td className="p-3 font-semibold text-emerald-400">-oic acid</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-pink-500">2</td>
+                      <td className="p-3 text-white font-bold">Ester (Methyl)</td>
+                      <td className="p-3 font-mono">-COOCH3</td>
+                      <td className="p-3 text-slate-400">alkoxycarbonyl-</td>
+                      <td className="p-3 font-semibold text-pink-400">-oate</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-orange-400">3</td>
+                      <td className="p-3 text-white font-bold">Aldehyde</td>
+                      <td className="p-3 font-mono">-CHO</td>
+                      <td className="p-3 text-slate-400">formyl- / oxo-</td>
+                      <td className="p-3 font-semibold text-emerald-400">-al</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-yellow-400">4</td>
+                      <td className="p-3 text-white font-bold">Ketone</td>
+                      <td className="p-3 font-mono">-CO-</td>
+                      <td className="p-3 text-slate-400">oxo-</td>
+                      <td className="p-3 font-semibold text-emerald-400">-one</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-emerald-400">5</td>
+                      <td className="p-3 text-white font-bold">Alcohol</td>
+                      <td className="p-3 font-mono">-OH</td>
+                      <td className="p-3 text-slate-400">hydroxy-</td>
+                      <td className="p-3 font-semibold text-emerald-400">-ol</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-cyan-400">6</td>
+                      <td className="p-3 text-white font-bold">Amine</td>
+                      <td className="p-3 font-mono">-NH2</td>
+                      <td className="p-3 text-slate-400">amino-</td>
+                      <td className="p-3 font-semibold text-cyan-400">-amine</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-sky-400">7</td>
+                      <td className="p-3 text-white font-bold">Alkene (Double)</td>
+                      <td className="p-3 font-mono">-C=C-</td>
+                      <td className="p-3 text-slate-400">alkenyl-</td>
+                      <td className="p-3 font-semibold text-emerald-400">-ene</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-violet-400">8</td>
+                      <td className="p-3 text-white font-bold">Alkyne (Triple)</td>
+                      <td className="p-3 font-mono">-C≡C-</td>
+                      <td className="p-3 text-slate-400">alkynyl-</td>
+                      <td className="p-3 font-semibold text-emerald-400">-yne</td>
+                    </tr>
+                    <tr className="hover:bg-slate-850/50">
+                      <td className="p-3 font-bold text-slate-500">9</td>
+                      <td className="p-3 text-white font-bold">Alkyl / Halogens</td>
+                      <td className="p-3 font-mono">-R / -X</td>
+                      <td className="p-3 text-slate-400">alkyl-, halo-</td>
+                      <td className="p-3 text-slate-500">-ane (Base alkane)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* TAB 3: QUIZ MODE */}
+        {activeTab === 'quiz' && (
+          <div className="max-w-xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+            
+            <div className="flex items-center justify-between border-b border-slate-850 pb-3">
+              <div className="space-y-1">
+                <span className="text-xs font-black uppercase text-slate-400 tracking-wider">Quiz Mode</span>
+                <h2 className="text-lg font-black text-white">Nomenclature Self-Assessment</h2>
+              </div>
+              <span className="text-xs bg-sky-500/10 text-sky-400 font-bold px-3 py-1 rounded-full border border-sky-500/20">
+                Score: {quizScore} / {QUIZ_QUESTIONS.length}
+              </span>
+            </div>
+
+            {/* Current Question Block */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-xs text-slate-400 font-bold">
+                <span>Question {currentQuizIndex + 1} of {QUIZ_QUESTIONS.length}</span>
+                <span className={`px-2 py-0.5 rounded font-bold ${
+                  QUIZ_QUESTIONS[currentQuizIndex].difficulty === 'Easy' ? 'bg-emerald-500/10 text-emerald-400' :
+                  QUIZ_QUESTIONS[currentQuizIndex].difficulty === 'Medium' ? 'bg-yellow-500/10 text-yellow-400' : 'bg-red-500/10 text-red-400'
+                }`}>
+                  {QUIZ_QUESTIONS[currentQuizIndex].difficulty}
+                </span>
+              </div>
+
+              <h3 className="text-sm md:text-base font-bold text-white leading-relaxed">
+                {QUIZ_QUESTIONS[currentQuizIndex].question}
+              </h3>
+
+              {/* Options list */}
+              <div className="space-y-2">
+                {QUIZ_QUESTIONS[currentQuizIndex].options.map((option, idx) => {
+                  let borderClass = "border-slate-800 hover:border-slate-700 bg-slate-950";
+                  let bgTextClass = "text-slate-300";
+
+                  if (selectedOption === idx) {
+                    borderClass = "border-sky-500 bg-sky-500/5";
+                    bgTextClass = "text-sky-400";
+                  }
+
+                  if (quizSubmitted) {
+                    if (idx === QUIZ_QUESTIONS[currentQuizIndex].correct) {
+                      borderClass = "border-emerald-500 bg-emerald-500/10";
+                      bgTextClass = "text-emerald-400";
+                    } else if (selectedOption === idx) {
+                      borderClass = "border-red-500 bg-red-500/10";
+                      bgTextClass = "text-red-400";
+                    } else {
+                      borderClass = "border-slate-800 opacity-50";
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={`opt-${idx}`}
+                      onClick={() => handleQuizAnswer(idx)}
+                      disabled={quizSubmitted}
+                      className={`w-full text-left p-3.5 rounded-xl border text-xs font-bold transition-all duration-150 flex items-center justify-between ${borderClass}`}
+                    >
+                      <span className={bgTextClass}>{option}</span>
+                      
+                      {quizSubmitted && idx === QUIZ_QUESTIONS[currentQuizIndex].correct && (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                      )}
+                      {quizSubmitted && selectedOption === idx && idx !== QUIZ_QUESTIONS[currentQuizIndex].correct && (
+                        <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Explanatory Panel on Submission */}
+            {quizSubmitted && (
+              <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2 animate-fade-in">
+                <span className="text-[10px] font-black uppercase text-sky-400 tracking-wider flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5" /> Explanation
+                </span>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {QUIZ_QUESTIONS[currentQuizIndex].explanation}
+                </p>
+              </div>
+            )}
+
+            {/* Submit / Next Actions */}
+            <div className="flex gap-3">
+              {!quizSubmitted ? (
+                <button
+                  onClick={submitQuizAnswer}
+                  disabled={selectedOption === null}
+                  className="w-full bg-sky-500 hover:bg-sky-400 disabled:opacity-50 disabled:hover:bg-sky-500 text-slate-950 font-black py-3 px-4 rounded-xl text-xs transition-all duration-150 flex items-center justify-center gap-2 shadow-lg shadow-sky-500/20"
+                >
+                  Verify Answer
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  onClick={nextQuizQuestion}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-black py-3 px-4 rounded-xl text-xs transition-all duration-150 flex items-center justify-center gap-2"
+                >
+                  {currentQuizIndex < QUIZ_QUESTIONS.length - 1 ? 'Next Question' : 'Restart Quiz'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+          </div>
+        )}
+
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-850 py-6 bg-slate-950/60 mt-12 text-center text-[10px] text-slate-500">
+        <div className="max-w-7xl mx-auto px-6">
+          <p>© 2026 IUPAC Nomenclature Masterclass Interactive Core. All Rights Reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+```
